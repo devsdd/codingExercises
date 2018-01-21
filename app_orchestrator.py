@@ -20,36 +20,7 @@ import os
 import re
 import logging
 import nmap
-
-# TODO: LOG ALL ERRORS
-
-'''
-use CRITICAL for failure to run program, ERROR for run-time errors
-logger.error('Failed to open file', exc_info=True)
-
-'''
-def log(status, message, operation):
-
-    logger = logging.getLogger(operation)
-    handler = logging.FileHandler("app_orchestrator.log")
-
-    #add formatter to the handler
-    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: "%(message)s"', datefmt="%Y-%m-%d %H:%M:%S")
-
-    handler.formatter = formatter
-    logger.addHandler(handler)
-
-    if status == "ERR":
-        logger.setLevel(logging.ERROR)
-        logger.error(message)
-    elif status == "CRIT":
-        logger.setLevel(logging.CRITICAL)
-        logger.critical(message)
-    elif status == "SUCCESS":
-        logger.setLevel(logging.INFO)
-        logger.info(message)
-
-    return
+import json
 
 def parse_command_line():
 
@@ -57,13 +28,28 @@ def parse_command_line():
     parser.add_argument('-f', '--file', required=True, help="File containing list of IPs to scan for deployment")
     args = parser.parse_args()
 
-    # TODO: check what exceptions argparse throws and catch them
-    if(len(sys.argv) != 3):
-        parser.print_help()
-        sys.exit(1)
-
     fileName = args.file
     return fileName
+
+def log(status, message, section):
+
+    logger = logging.getLogger(section)
+    handler = logging.FileHandler("app_orchestrator.log")
+
+    # make the log formatter as per our needs: timestamp, section of this program where log was generated, syslog level, and msg
+    formatter = logging.Formatter('%(asctime)s %(name)s %(levelname)s: "%(message)s"', datefmt="%Y-%m-%d %H:%M:%S")
+
+    handler.formatter = formatter
+    logger.addHandler(handler)
+
+    if status == "ERR":
+        logger.error(message)
+    elif status == "CRIT":
+        logger.critical(message)
+    elif status == "SUCCESS":
+        logger.info(message)
+
+    return
 
 # takes a file as input and checks if it contains one IP per line. Returns a list of IP's if file contents are valid
 def extract_IPs(fileName):
@@ -79,7 +65,6 @@ def extract_IPs(fileName):
         with open(fileName, 'r') as f:
             lines = f.readlines()
     except:
-        # LOG exception
         log("CRIT", "Error reading input file", "InputFile")
         raise
 
@@ -102,7 +87,7 @@ def extract_IPs(fileName):
             log("CRIT", errorMsg, "InputFile")
             raise Exception(errorMsg)
 
-        # NOTE: this is not a perfect regex but the idea is to do a basic check for extra dots, spaces etc.
+        # NOTE: this is not a perfect regex for an IPv4 address but the idea is to do a basic check for obviously invalid characters
         # this will pass something like 999.999.999.999 which is obviously an invalid IP but,
         # We trade some accuracy off against simplicity
         searchObj = re.search(r'^(\d{1,3}\.){3}\d{1,3}$', line)
@@ -115,10 +100,9 @@ def extract_IPs(fileName):
 
 def scan_IPs(ips):
 
-    takenDict = {}
     freeDict = {}
     # Let's not mess with privileged ports, let's find 100 non-privileged ports per machine
-    targetPortsRange = [x for x in range(9025,9124)]
+    targetPortsRange = [x for x in range(1025,1124)]
 
     for ip in ips:
         # ignore comments
@@ -127,7 +111,7 @@ def scan_IPs(ips):
 
         nm = nmap.PortScanner()
         try: 
-            nm.scan(ip, '9025-9124')
+            nm.scan(ip, '1025-1124')
         except:
             log("ERR", "Ports scan failed for %s" %ip.rstrip('\n'), "Scan" )
             raise
@@ -136,13 +120,17 @@ def scan_IPs(ips):
 
         count = 0
         for host in nm.all_hosts():
-            takenPortsList = []
-            freePortsList = []
+            if nm[host].all_protocols():
+                # at least one port in the list was occupied
+                takenPortsList = nm[host]['tcp'].keys()
+                freePortsList = [x for x in targetPortsRange if x not in takenPortsList]
+            else:
+                # all ports in the list were free
+                freePortsList = targetPortsRange
 
-            takenPortsList = nm[host]['tcp'].keys()
-            freePortsList = [x for x in targetPortsRange if x not in takenPortsList]
 	    freeDict[ip.rstrip('\n')] = freePortsList
             count += 1
+
     return freeDict
 
 if __name__ == "__main__":
@@ -150,5 +138,5 @@ if __name__ == "__main__":
     serversFile = parse_command_line()
     ips = extract_IPs(serversFile)
     freePorts = scan_IPs(ips)
-    print(freePorts)
-
+    output = json.dumps(freePorts, indent=4, sort_keys=True)
+    print(output)
