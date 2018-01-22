@@ -171,7 +171,7 @@ def scan_IP(ip):
     # write output to file in every run to make process async and less prone to fail completely
     output = json.dumps(currentDict, sort_keys=True)
     with open("result.json", "a") as f:
-        f.write(output)
+        f.write(output + "\n")
 
     return currentDict
 
