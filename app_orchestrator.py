@@ -137,7 +137,6 @@ def scan_IPs(ips):
     return freeDict
 
 # global vars to persist across parallel function calls
-resultDict = {}
 targetPortsRange = [x for x in range(1025,1124)]
 
 def scan_IP(ip):
@@ -157,6 +156,7 @@ def scan_IP(ip):
 
     count = 0
     for host in nm.all_hosts():
+        currentDict = {}
         if nm[host].all_protocols():
             # at least one port in the list was occupied
             takenPortsList = nm[host]['tcp'].keys()
@@ -165,10 +165,15 @@ def scan_IP(ip):
             # all ports in the list were free
             freePortsList = targetPortsRange
 
-        resultDict[ip.rstrip('\n')] = freePortsList
+        currentDict[ip.rstrip('\n')] = freePortsList
         count += 1
 
-    return resultDict
+    # write output to file in every run to make process async and less prone to fail completely
+    output = json.dumps(currentDict, sort_keys=True)
+    with open("result.json", "a") as f:
+        f.write(output)
+
+    return currentDict
 
 def get_cpu_cores():
 
@@ -188,7 +193,3 @@ if __name__ == "__main__":
     pool = Pool(processes=cores)
 
     freePorts = pool.map(scan_IP, ips)
-    output = json.dumps(freePorts, indent=4, sort_keys=True)
-    with open("result.json", "w") as f:
-        f.write(output)
-
