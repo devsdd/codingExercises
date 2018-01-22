@@ -105,6 +105,7 @@ def scan_IPs(ips):
     # Let's not mess with privileged ports, let's find 100 non-privileged ports per machine
     targetPortsRange = [x for x in range(1025,1124)]
 
+    # this will serially iterate thru all the ips, can this be made parallel
     for ip in ips:
         # ignore comments
         if(ip.startswith("#")):
@@ -112,6 +113,7 @@ def scan_IPs(ips):
 
         nm = nmap.PortScanner()
         try: 
+	    # vijay - this section is blocking and will add delay if we have 100 ips. can this be made async?
             nm.scan(ip, '1025-1124')
         except:
             log("ERR", "Ports scan failed for %s" %ip.rstrip('\n'), "Scan" )
