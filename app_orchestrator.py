@@ -21,6 +21,7 @@ import re
 import logging
 import nmap
 import json
+from multiprocessing import Pool
 
 def parse_command_line():
 
@@ -133,10 +134,59 @@ def scan_IPs(ips):
 
     return freeDict
 
+# global vars to persist across parallel function calls
+resultDict = {}
+targetPortsRange = [x for x in range(1025,1124)]
+
+def scan_IP(ip):
+
+    # ignore comments
+    if(ip.startswith("#")):
+        return
+
+    nm = nmap.PortScanner()
+    try: 
+        nm.scan(ip, '1025-1124')
+    except:
+        log("ERR", "Ports scan failed for %s" %ip.rstrip('\n'), "Scan" )
+        raise
+    else:
+        log("SUCCESS", "Ports scan finished successfully for %s" %ip.rstrip('\n'), "Scan" )
+
+    count = 0
+    for host in nm.all_hosts():
+        if nm[host].all_protocols():
+            # at least one port in the list was occupied
+            takenPortsList = nm[host]['tcp'].keys()
+            freePortsList = [x for x in targetPortsRange if x not in takenPortsList]
+        else:
+            # all ports in the list were free
+            freePortsList = targetPortsRange
+
+        resultDict[ip.rstrip('\n')] = freePortsList
+        count += 1
+
+    return resultDict
+
+def get_cpu_cores():
+
+    count = 0
+    for line in open("/proc/cpuinfo"):
+        if "processor" in line:
+            count += 1
+
+    return count
+
 if __name__ == "__main__":
 
     serversFile = parse_command_line()
     ips = extract_IPs(serversFile)
-    freePorts = scan_IPs(ips)
+    cores = get_cpu_cores()
+#    freePorts = scan_IPs(ips)
+    pool = Pool(processes=cores)
+
+    freePorts = pool.map(scan_IP, ips)
     output = json.dumps(freePorts, indent=4, sort_keys=True)
-    print(output)
+    with open("result.json", "w") as f:
+        f.write(output)
+
