@@ -1,0 +1,5 @@
+Reallocated_Sector_Ct: 100
+Seek_Error_Rate: 200
+Current_Pending_Sector: 200
+Offline_Uncorrectable: 150
+Power_Cycle_Count: 1000
