@@ -25,5 +25,5 @@ if __name__ == "__main__":
 
     for kf, vf in fstab.items():
         for km, vm in mtab.items():
-            if ('ro,' in vf or ',ro' in vf or ',ro,' in vf) and vm == 'ro':
+            if not ('ro,' in vf or ',ro' in vf or ',ro,' in vf) and vm == 'ro':
                 send_alert()
